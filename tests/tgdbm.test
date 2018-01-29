@@ -1,0 +1,467 @@
+# -*- tcl -*-
+# Commands covered:  gdbm_open (gdbmN: store close, ...)
+#
+# This file contains a collection of tests for the gdbm-lib (version 0.5)
+# Sourcing this file into Tcl runs the tests and
+# generates output for errors.  No output means no errors were found.
+#
+
+if {[lsearch [namespace children] ::tcltest] == -1} {
+	package require tcltest
+	namespace import ::tcltest::*
+}
+
+# this seems to behave different on windows/unix ... 
+# gdbm_array-1.9 does a test on opening a file with a writer AND a reader
+skip {gdbm_array-1.9 gdbm_without_null-1.1 gdbm_without_null-1.2 gdbm_without_null-1.3}
+verbose error
+
+# extend auto-loader-path, to avoid interference by installed versions
+set auto_path [concat .. $auto_path]
+package require -exact tgdbm 0.5
+
+# just to be sure delete the created test-files
+catch {file delete -force test.gdbm test1.gdbm strange.gdbm junk_n_copy.gdbm artest.gdbm}
+
+# junk_n.gdbm contains data without a trailing newline!
+file copy -force junk_n.gdbm junk_n_copy.gdbm
+
+
+proc dummy {alertmsg} {
+    puts stderr "Fatal error: $alertmsg"
+}
+
+
+test gdbm_initial-1.1 {get handles} {
+	# must result in empty list
+	gdbm_open
+} {}
+
+test gdbm_initial-1.2 {get help} {
+	# must result in empty list
+	set res [string range [gdbm_open -help] 0 27]
+    lappend res [string range [gdbm_open -help -no_trailing_null] 0 27]
+} {gdbm_open ?options? filename {gdbm_open ?options? filename}}
+
+# ------- open -------
+test gdbm_open-1.1 {gdbm_open command all arguments} {
+    list [regexp {gdbm[0-9]+} [set x [gdbm_open -wrcreat -writer -sync -nolock -fatal_func dummy -block_size 1024 test.gdbm]]] [$x close] \
+        [regexp {gdbm[0-9]+} [set y [gdbm_open -reader test.gdbm]]] [$y close]
+} {1 {} 1 {}}
+
+test gdbm_open-1.2 {gdbm_open command: reading non existing db} {
+    list [catch {gdbm_open -reader dudidu.gdbm}] \
+        [catch {gdbm_open -dudidu}]
+} {1 1}
+
+# ------- open / locking -------
+# does not behave equal on Linux/Windows and Solaris because
+# of different locking-strategies in gdbm (fcntl vs. flock)
+#  test gdbm_open-1.3 {gdbm_open command locking 2 writer} {
+#      set g [gdbm_open -writer test.gdbm]
+#      list [catch {gdbm_open -writer test.gdbm}] [$g close]
+#  } {1 {}}
+
+test gdbm_open-1.4 {gdbm_open command locking 2 reader} {
+    set g [gdbm_open -reader test.gdbm]
+    list [catch {set g2 [gdbm_open -reader test.gdbm]}] [$g close] [$g2 close]
+} {0 {} {}}
+
+test gdbm_open-1.5 {gdbm_open close read} {
+	set g [gdbm_open -wrcreat strange.gdbm]
+	$g -insert store 1 hello
+	set res [expr {"[gdbm_open]"=="$g"}]
+	$g close
+	# after 50
+	set g [gdbm_open -writer strange.gdbm]
+	lappend res [set key [$g firstkey]]
+	lappend res [$g fetch $key]
+	$g close
+	set res
+} {1 1 hello}
+
+test gdbm_open-1.6 {trying to write into "reader"} {
+	set cmd [gdbm_open strange.gdbm]
+	set res [catch {$cmd -insert store hello world} msg]
+	lappend res $msg $GDBM_ERRNO
+	$cmd close
+	set res
+} {1 {error: Item not inserted/replaced. gdbm opened as reader.} 12}
+
+test gdbm_open-1.7 {wrong option} {
+	set res [catch {gdbm_open -xyz strange.gdbm} msg]
+	lappend res [string range $msg 0 40] $GDBM_ERRNO
+} {1 {error: gdbm_open - No such argument: -xyz} 20}
+
+test gdbm_open-1.8 {open non existing gdbm-file as reader} {
+	set res [catch {gdbm_open notexistant.gdbm} msg]
+	lappend res $msg $GDBM_ERRNO
+} {1 {error: gdbm_open (file: 'notexistant.gdbm') - File open error} 3}
+
+# this was a bug in previous versions (1.8.0)
+test gdbm_open-1.9 {open with -writer on non-existing db} {
+	set res [catch {gdbm_open -writer notexistant.gdbm} msg]
+	lappend res $msg
+} {1 {error: gdbm_open (file: 'notexistant.gdbm') - File open error}}
+
+# ------- store/fetch -------
+test gdbm_store-1.1 {gdbmN store -replace/-insert} {
+	# -insert of same key should throw error
+    set g [gdbm_open -wrcreat test.gdbm]
+	set msg ""
+    set res [$g -replace store key value]
+	lappend res [$g fetch key]
+	lappend res [catch {$g -insert store key diffvalue} msg]
+	lappend res $msg
+	lappend res [$g close]
+	set res
+} {value 1 {error: Item not inserted, already exists. Use '-replace store key ...'} {}}
+
+# ------- check for -replace -------
+test gdbm_store-1.2 {gdbmN store} {
+    set g [gdbm_open -writer test.gdbm]
+    list [$g -replace store key2 value2] \
+            [$g -replace store key2 value3] \
+            [$g fetch key2] [$g close]
+} {{} {} value3 {}}
+
+# ------- delete -------
+test gdbm_delete-1.1 {gdbmN delete} {
+    set g [gdbm_open -writer test.gdbm]
+    set x [list [$g -insert store en2del yabbadabbadu] [$g delete en2del]]
+    lappend x [catch {$g fetch en2del}] [$g close]
+} {{} {} 1 {}}
+
+# ------- first/nextkey and count -------
+test gdbm_firstkey-1.1 {gdbmN firstkey} {
+    set g [gdbm_open -newdb test.gdbm]
+    set x [$g count]
+    lappend x [$g firstkey] 
+    lappend x [$g -replace store key1 firstvalue] 
+    lappend x [$g firstkey] 
+    lappend x [$g close]
+} {0 {} {} key1 {}}
+
+test gdbm_firstkey-1.2 {iterate over gdbm} {
+    set k {key1 key2 key3}
+    set v {value1 value2 value3}
+    set g [gdbm_open -writer -wrcreat -newdb test.gdbm]
+    foreach i $k j $v { $g -insert store $i $j }
+    set res [$g count]
+    set key [$g firstkey]
+    set x [lsearch -exact $k $key]
+    set k [lreplace $k $x $x]
+    foreach dummy {1 2} {
+        set key [$g nextkey $key]
+        set x [lsearch -exact $k $key]
+        set k [lreplace $k $x $x]
+    }
+    $g close
+    lappend res [llength $k]
+} {3 0}
+
+# ------- exists -------
+# (uses key1 in test.gdbm from gdbm_firstkey-1.2)
+test gdbm_exists-1.1 {gdbmN exists} {
+    set g [gdbm_open -reader test.gdbm]
+    set res [$g exists key1]
+    lappend res [$g exists brabbelbrabbel] [$g close]
+} {1 0 {}}
+
+# ------- reorganize -------
+test gdbm_reorg-1.1 {gdbmN reorganize} {
+	catch {file delete -force test.gdbm test1.gdbm}
+    set g [gdbm_open -writer -wrcreat -sync test.gdbm]
+	set res [expr {"[gdbm_open]"=="$g"}]
+    $g -replace store hello world
+	$g -replace store Stefan [string repeat Vogel,Stefan 2]
+	$g delete Stefan
+    set itemSize [$g count]
+	set fileSize [file size test.gdbm]
+	# just a dummy open to confuse *g*
+    set dummyg2 [gdbm_open -wrcreat -writer -sync -nolock -fatal_func dummy -block_size 1024 test1.gdbm]
+	lappend res [expr {"[lsort [gdbm_open]]"=="[lsort [list $g $dummyg2]]"}]
+    set dummys2 [$dummyg2 count]
+    $g reorganize
+    set fileSize2 [file size test.gdbm]
+    lappend res [list $itemSize [$g count] [expr {$fileSize > $fileSize2}]]
+    $dummyg2 close
+    $g close
+    set res
+} {1 1 {1 1 1}}
+
+# ------- error-codes -------
+# in gdbm-1.8.0 not all error-strings are provided, this should be
+# fixed in the next release. Until then the error-strings are only
+# checked up to the 17th error (Illegal data)
+# this is fixed in gdbm-1.8.3
+test gdbm_error-1.1 {checking all error-codes} {
+    set errors {"No error" "Malloc error" \
+					"Block size error" "File open error" "File write error" \
+					"File seek error" "File read error" "Bad magic number" \
+					"Empty database" "Can't be reader" "Can't be writer" \
+					"Reader can't delete" "Reader can't store" \
+					"Reader can't reorganize" "Should not happen: unused error code" \
+                                        "Item not found" \
+					"Reorganize failed" "Cannot replace" "Illegal data" \
+					"Option already set" "Illegal option"}
+    set x 0
+    for {set i 0} {$i < [llength $errors]} {incr i} {
+        if {[gdbm_strerror $i] != [lindex $errors $i]} {
+            set x 1
+            puts "[gdbm_strerror $i]; [lindex $errors $i]"
+        }
+    }
+    set x
+} {0}
+
+# ------- error-behaviour -------
+test gdbm_error-1.2 {checking error behaviour} {
+	set g [catch {gdbm_open -writer test.gdbm}]
+	# wrong parameters
+	set res [catch {$g schubidu} msg]
+	lappend res [catch {$g -replace fred} msg]
+	lappend res [catch {$g -replace fred wilma feuerstein} msg]
+	catch {$g close}
+	# non-existing command
+	lappend res [catch {$g firstkey} msg]
+	set res
+} {1 1 1 1}
+
+# ------- array-command -------
+test gdbm_array-1.1 {checking array command array -> gdbm} {
+	# assume that the key-values "key3 -> value3" (which are not firstkey)
+	# are stored in test.gdbm (from test gdbm_firstkey-1.2)
+	# initialize file to correct values
+	catch {file delete -force test.gdbm}
+	set g [gdbm_open -wrcreat test.gdbm]
+	$g -insert store key3 value3
+	$g close
+	
+	set res [catch {gdbm_open -writer -full_cache test.gdbm} msg]
+	lappend res $msg
+	lappend res [gdbm_open -writer -array ar test.gdbm]
+	# get an array-variable (which is stored in test.gdbm) and one which is not
+	lappend res [set ar(key3)] [catch {set ar(unknown)}]
+	# delete whole array
+	foreach key [array names ar] { unset ar($key) }
+	# now there has to be 0 entries
+	lappend res count= [ar count]
+	# get unknown value
+	lappend res [catch {set ar(unknown)}]
+	# insert/update via array
+	set ar(somekey) anyvalue
+	lappend res [ar firstkey] [ar fetch somekey] [ar count]
+	set ar(somekey) "other value"
+	lappend res [ar fetch somekey]
+	ar close
+	lappend res [info vars ar]
+	set res
+} {1 {error: gdbm_open - cannot specify '-full_cache', when not providing an arrayname with '-array'.} ar value3 1 count= 0 1 somekey anyvalue 1 {other value} {}}
+
+test gdbm_array-1.2 {checking array command gdbm -> array} {
+	# keep values from above test
+	set res [gdbm_open -writer -array ar test.gdbm]
+	lappend res [ar full_cache] [ar has_array]
+	# replace item
+	ar -replace store somekey "bla bla"
+	lappend res $ar(somekey)
+	# delete and insert an item
+	ar delete somekey
+	lappend res [llength [array names ar]]
+	ar -insert store hello world
+	lappend res $ar(hello)
+	# must also close the file
+	unset ar
+	set res
+} {ar 0 1 {bla bla} 0 world}
+
+test gdbm_array-1.3 {checking array detach/attach} {
+	set res [gdbm_open -writer -array ar test.gdbm]
+	lappend res [catch {ar attach_array}]
+	unset ar
+	set hd [gdbm_open -writer test.gdbm]
+	lappend res [catch {$hd detach_array}]
+	$hd close
+	set res
+} {ar 1 1}
+
+test gdbm_array-1.4 {error with variable as command} {
+	set res [gdbm_open -writer -array sar test.gdbm]
+	lappend res [catch {$sar has_array} msg]
+	lappend res [catch {set sar 1} msg]
+	lappend res [catch {set sar} msg]
+	unset sar
+	# try to attach array twice
+	lappend res [gdbm_open -writer -array sar test.gdbm]
+	lappend res [catch {gdbm_open -wrcreat -array sar testlar.gdbm} msg]
+	sar close
+	set res
+} {sar 1 1 1 sar 1}
+
+test gdbm_array-1.5 {global array-variable} {
+	proc local_gdbm_array_1_5 {method} {
+		global lar
+		switch -- $method {
+			create {
+				return [gdbm_open -writer -array lar test.gdbm]
+			}
+			set {
+				set lar(1) one
+				return [lar fetch 1]
+			}
+			get {
+				return lar(1)
+			}
+			close {
+				$lar close
+			}
+			create_set {
+				set lar(2) two
+				set x [list [lar fetch 2] $lar(2)]
+				# lar close
+				return $x
+			}
+		}
+	}
+	gdbm_open -writer -array lar test.gdbm
+	global lar
+	set lar(global) global_value
+	set lar(2) global_value_2
+	set res [local_gdbm_array_1_5 create_set]
+	lappend res $lar(2)
+	lar close
+	set res
+} {two two two}
+
+test gdbm_array-1.6 {create and reread array} {
+	file delete -force artest.gdbm
+	array set myAr16 {a 1 b 2 c 3 d 4711 e -1}
+	set res [catch {set g [gdbm_open -wrcreat -array myAr16 artest.gdbm]} msg]
+	lappend res [$g count]
+	array set myAr16 [array get myAr16]
+	lappend res [$g count]
+	catch {$g close}
+	set g [gdbm_open -wrcreat -array myAr16_2 artest.gdbm]
+	lappend res [lsort [array get myAr16_2]]
+	$g close
+	set res
+} {0 0 5 {-1 1 2 3 4711 a b c d e}}
+
+test gdbm_array-1.7 {create and reread array} {
+	file delete -force artest.gdbm
+	set lmyAr17 {1 a 2 b 3 c 4711 d -1 e}
+	set g [gdbm_open -wrcreat -array myAr17 artest.gdbm]
+	array set myAr17 $lmyAr17
+	$g close
+	set g [gdbm_open -wrcreat -array myAr17 artest.gdbm]
+	set res {}
+	foreach key [lsort [array names myAr17]] {
+		lappend res $key $myAr17($key)
+	}
+	lappend res [$g maxkey]
+	lappend res [lsort [$g keys]]
+	set myAr17(append) nothing
+	lappend res [$g maxkey]
+	$g close
+	
+	set res
+} {-1 e 1 a 2 b 3 c 4711 d 4711 {-1 1 2 3 4711} 4711}
+
+test gdbm_array-1.8 {check that existing array-entries are not stored} {
+	array set myAr18 {hello world ciao ocean}
+	catch {file delete -force ar18.gdbm}
+	set g [gdbm_open -wrcreat -array myAr18 ar18.gdbm]
+	set myAr18(ATH) "Athen Greece"
+	$g close
+	set g [gdbm_open -reader -array myAr18_2 -full_cache ar18.gdbm]
+	# must be
+	set res [array get myAr18_2]
+	$g close
+	catch {file delete -force ar18.gdbm}
+	set res
+} {ATH {Athen Greece}}
+
+test gdbm_array-1.9 {check for updates} {
+	set g1 [gdbm_open -wrcreat -array myAr19 ar19.gdbm]
+	$g1 -replace store "Hello" "World"
+	set res ""
+	lappend res [catch {gdbm_open -reader -array myAr19_2 ar19.gdbm} msg] $msg
+	catch {$g1 close}
+	catch {file delete -force ar19.gdbm}
+	set res 
+} {1 {error: gdbm_open (file: 'ar19.gdbm') - File open error}}
+
+test gdbm_array-1.10 {update array with regular commands} {
+	set g1 [gdbm_open -wrcreat -array myAr110 ar110.gdbm]
+	$g1 -replace store "Hello" "World"
+	set res $myAr110(Hello)
+	catch {$g1 close}
+	catch {file delete -force ar110.gdbm}
+	set res
+} {World}
+
+test gdbm_without_null-1.1 {-no_trailing_null} {
+	set cmd [gdbm_open -no_trailing_null -writer junk_n.gdbm]
+	set key [$cmd firstkey]
+	set res $key
+	lappend res [$cmd fetch $key]
+	lappend res [set key [$cmd nextkey $key]]
+	lappend res [$cmd fetch $key]
+	$cmd close
+	set res
+} {Annabelle Vogel,Annabelle Stefan Vogel,Stefan}
+
+test gdbm_without_null-1.2 {array handling} {
+	set cmd [gdbm_open -writer -no_trailing_null -array myAr12 junk_n_copy.gdbm]
+	set myAr12(checkthis) out
+	set res [lsort [array names myAr12]]
+	$cmd delete checkthis
+	lappend res [lsort [array names myAr12]]
+	lappend res [$cmd maxkey]
+	$cmd close
+	set res
+} {Annabelle Fabian Felix Stefan checkthis {Annabelle Fabian Felix Stefan} 0}
+
+
+test gdbm_without_null-1.3 {array handling} {
+	set res {}
+	set cmd [gdbm_open -reader -no_trailing_null -full_cache -array myAr13 junk_n_copy.gdbm]
+	lappend res [lsort [array names myAr13]]
+	lappend res [set key [$cmd firstkey]] [set key [$cmd nextkey $key]] [set key [$cmd nextkey $key]]
+	lappend res [$cmd maxkey]
+	$cmd close
+	set res
+} {{Annabelle Fabian Felix Stefan} Annabelle Stefan Felix 0}
+
+test gdbm_sync-1.1 {sync-call} {
+	set cmd [gdbm_open -wrcreat junk_sync11.gdbm]
+	$cmd sync
+	$cmd close
+	catch {file delete -force junk_sync11.gdbm}
+	set x ""
+} {}
+
+test gdbm_no_trail_null-1.1 {test1 von Thomas} {
+	set gdbm_handle [gdbm_open -wrcreat -no_trailing_null gaga.gdbm]
+	$gdbm_handle -insert store key1 {Some value to be stored.}
+	set result [$gdbm_handle keys]
+	$gdbm_handle close
+	catch {file delete -force gaga.gdbm}
+	set result
+} {key1}
+
+test gdbm_no_trail_null-1.2 {test2 von Thomas} {
+	set gdbm_handle [gdbm_open -wrcreat -no_trailing_null gaga.gdbm]
+	set key test
+	$gdbm_handle -replace store $key ""
+	set result [$gdbm_handle fetch $key]
+	$gdbm_handle close
+	catch {file delete -force gaga.gdbm}
+	set result
+} {}
+
+# delete the created test-files
+# catch {file delete -force test.gdbm test1.gdbm strange.gdbm artest.gdbm testlar.gdbm junk_n_copy.gdbm}
+
+::tcltest::cleanupTests

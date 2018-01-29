@@ -1,0 +1,246 @@
+# -*- tcl -*-
+# Commands covered:  qgdbm::*-family
+#
+# This file contains a collection of tests for the qgdbm-lib (version 0.5)
+# Sourcing this file into Tcl runs the tests and
+# generates output for errors.  No output means no errors were found.
+#
+
+# extend auto-loader-path, to avoid interference by installed versions
+set auto_path [concat .. $auto_path]
+package require -exact qgdbm 0.5
+
+# standard insert-data
+set stdInsert [list "anna schatzi [clock scan 09/09/1972] 1.80 62" \
+	"stefan stef [clock scan 05/24/1969] 1.92 72" \
+	"christian chris [clock scan 01/26/1974] 1.85 78"]
+
+# ------- init -------
+qgdbm::init -system 0 -log 0
+
+# ------- create table -------
+test qgdbm_create-tbl-1.1 {create a table with all types} {
+    set x [catch {qgdbm::tsql create table check {{name cchar}}}]
+    qgdbm::tsql creATE tabLE chECK {{name chAR} {NickName char} {birthday daTE} {size reAL} {weight intEGER}}
+    lappend x [file exists check.[qgdbm::init -dbext]] [regexp {gdbm[0-9]+} [qgdbm::gdbmHandle check]]
+} {1 1 1}
+
+# ------- insert -------
+test qgdbm_insert-1.1 {insert correct data into table check} {
+    set bl {}
+    foreach date {09/09/1972 05/24/1969 01/26/1974} {
+        lappend bl [clock scan $date]
+    }
+    foreach name {anna stefan christian} \
+            nick {schatzi stef chris} \
+            birthday $bl \
+            size {1.80 1.92 1.85} \
+            weight {62 72 78} {
+        qgdbm::tsql insert into check values \
+                [list "$name $nick $birthday $size $weight"]
+    }
+    set x [[qgdbm::gdbmHandle check] count]
+    qgdbm::tsql inSERT inTO cheCK {$name} values [list yoho]
+    lappend x [qgdbm::tsql selECT * frOM cheCK pklIST yoho]
+    qgdbm::tsql deLETE frOM cheCK pklIST yoho
+    lappend x [[qgdbm::gdbmHandle check] count]
+    qgdbm::tsql delete from check
+    lappend x [[qgdbm::gdbmHandle check] count]
+    # multiple inserts at once
+    qgdbm::tsql inSERT inTO cheCK values $stdInsert
+    lappend x [[qgdbm::gdbmHandle check] count]
+    set x
+} {4 {{yoho {} {} {} {}}} 4 1 4}
+
+test qgdbm_insert-1.2 {insert wrong data into table check} {
+    # no pk
+    set x [catch {qgdbm::tsql insert into check \
+            {$nickname $birthday} values [list "dubidu [clock scan 01/01/1999]"]} msg]
+    # col-value-length not equal
+    lappend x [catch {qgdbm::tsql insert into check \
+            {$name $nick $birthday} values [list "dubidu [clock scan 01/01/1999]"]} msg]
+    # wrong column-name "nick"
+    lappend x [catch {qgdbm::tsql insert into check \
+            {$name $nick} values [list "dubidu [clock scan 01/01/1999]"]} msg]
+    # no such table
+    lappend x [catch {qgdbm::tsql insert into chck {$name} values [list stefan]} msg]
+    # pk already exist
+    lappend x [catch {qgdbm::tsql insert into check {$name} values [list stefan]} msg]
+    set c [[qgdbm::gdbmHandle check] count]
+    # columns without $
+    qgdbm::tsql insert into check "name birthday" values {{a 1} {b 2} {c 3}}
+    lappend x [expr [[qgdbm::gdbmHandle check] count] - $c]
+    qgdbm::tsql delete from check pklist {a b c}
+    lappend x [expr [[qgdbm::gdbmHandle check] count] - $c]
+} {1 1 1 1 1 3 0}
+
+test qgdbm_insert-1.3 {insert by previous select} {
+    qgdbm::tsql create table check_new {{name char} {birthday date}}
+    qgdbm::tsql insert into check_new values [qgdbm::tsql select {$name $birthday} from check]
+    set x [expr [[qgdbm::gdbmHandle check] count] - [[qgdbm::gdbmHandle check_new] count]]
+    qgdbm::tsql delete from check_new
+    lappend x [[qgdbm::gdbmHandle check_new] count]
+    qgdbm::tsql insert into check_new {$name} values [qgdbm::tsql select {$name} from check]
+    lappend x [[qgdbm::gdbmHandle check_new] count]
+    lappend x [qgdbm::tsql select * from check_new order_asc {$name}]
+    qgdbm::tsql delete from check_new
+    qgdbm::tsql insert into check_new {$name} values [qgdbm::tsql select {$name} from check pklist stefan]
+    lappend x [qgdbm::tsql select * from check_new order_asc {$name}]
+} {0 1 4 {{anna {}} {christian {}} {stefan {}}} {{stefan {}}}}
+
+# ------ select ------
+test qgdbm_select-1.1 {simple selects} {
+    set x [llength [qgdbm::tsql seLect * frOm cHeck]]
+    lappend x [qgdbm::tsql seLect {i $name} fRom chEck orDer_aSc {$name}]
+    lappend x [qgdbm::tsql seleCt {$name} froM cheCk wHere {"$birthday" < [clock scan "01/01/1973"]} oRder_dEsc {$name}]
+    lappend x [lrange [lindex [qgdbm::tsql select * from check pklist "stefan" order_asc {$NickName}] 0] 0 1]
+} {3 {{i anna} {i christian} {i stefan}} {stefan anna} {stefan stef}}
+
+test qgdbm_select-1.2 {complicated selects with pklist} {
+    set x [qgdbm::tsql select {$NickName $weight $name} from check pklist {"stefan" "anna"} order_desc {$weight}]
+    lappend x [catch {qgdbm::tsql select {$name $NickName} from check pklist {"stefan" "anna"} order_desc {$weight}}]
+    # empty list
+    lappend x [qgdbm::tsql select {$name} from check pklist stefan where {[string equal $name "anna"]}]
+    lappend x [qgdbm::tsql select {$name} from check pklist stefan where {[string equal $name "stefan"]}]
+} {{stef 72 stefan} {schatzi 62 anna} 1 {} stefan}
+
+test qgdbm_select-1.3 {null-selects, etc.} {
+    set x {}
+    lappend x [qgdbm::tsql select * from check pklist {"stefan"} where {"$name" == "anna"}]
+    lappend x [qgdbm::tsql select {$NickName $name} from check order_asc {$NickName} where {"$name" == "schubidu"}]
+} {{} {}}
+
+test qgdbm_select-1.4 {error-checking} {
+    # unknown column
+    set x [catch {qgdbm::tsql select {$Name} from check} msg]
+    # unknown order
+    lappend x [catch {qgdbm::tsql select {$name} from check order_dsc {$name}} msg]
+    # cannot order by not-selected-column
+    lappend x [catch {qgdbm::tsql select {$NickName} from check order_asc {$name}} msg]
+    # no such pk --> no error
+    lappend x [qgdbm::tsql select {$NickName} from check order_asc {$NickName} pklist yahoo]
+    lappend x [qgdbm::tsql select {$NickName} from check order_asc NickName pklist yahoo]
+    lappend x [qgdbm::tsql select {$NickName} from check order_asc NickName pklist stefan]
+} {1 1 1 {} {} stef}
+
+# ------- update -------
+test qgdbm_update-1.1 {update each field} {
+    # pk could not be update:
+    set x [catch {qgdbm::tsql update check {name} hello} msg]
+    qgdbm::tsql updaTe cHeck {NickName $size} {steff 1.90} Where {"$NickName" == "stef"}
+    lappend x [qgdbm::tsql select {$name $NickName $size} from check \
+	    where {("$NickName" == "steff") && ("$size" == "1.90")}]
+    # could not update pk
+    lappend x [catch {qgdbm::tsql update check {$name} stefann where {"$name" == "stefan"}} msg]
+    qgdbm::tsql update check {$weight} 1213 where {"$weight" == "72"}
+    lappend x [qgdbm::tsql select {$weight $name} from check where {"$weight" == "1213"}]
+    lappend x [catch {qgdbm::tsql update check {$schubidu} bla} msg]
+    lappend x $affected_rows
+} {1 {{stefan steff 1.90}} 1 {{1213 stefan}} 1 0}
+
+test qgdbm_update-1.2 {update via pklist} {
+    # without $
+    qgdbm::tsql update check NickName steffi pKlist "stefan"
+    set x [qgdbm::tsql select {$NickName} from checK Pklist "stefan"]
+    lappend x $affected_rows
+    qgdbm::tsql update check {$NickName} steffi pklist "dudidu"
+    lappend x $affected_rows
+} {steffi 1 0}
+
+# ------- delete -------
+test qgdbm_delete-1.1 {delete some values from table check} {
+    qgdbm::tsql delete from check where {[string match "stefan" "$name"] || [string match "christian" "$name"]}
+    set x [[qgdbm::gdbmHandle check] count]
+    qgdbm::tsql delEte from cHeck Pklist {"anna"}
+    lappend x [[qgdbm::gdbmHandle check] count]
+} {2 1}
+
+test qgdbm_delete-1.2 {delete the rest} {
+    # insert values again
+    qgdbm::tsql insert into check values $stdInsert
+    qgdbm::tsql delete from check
+    set x [[qgdbm::gdbmHandle chEck] count]
+    set bl {}
+    foreach date {09/09/1972 05/24/1969 01/26/1974} {
+        lappend bl [clock scan $date]
+    }
+    foreach name {anna stefan christian} \
+            nick {schatzi stef chris} \
+            birthday $bl \
+            size {1.80 1.92 1.85} \
+            weight {62 72 78} {
+                qgdbm::tsql insert into check {$NickName name $birthday size $weight} \
+			valuEs [list "$nick $name $birthday $size $weight"]
+    }
+    # nothing deleted
+    qgdbm::tsql delete from check where {"$NickName" == "stef"} pklist {anna christian}
+    lappend x [[qgdbm::gdbmHandle Check] count]
+    qgdbm::tsql delete from check where {"$NickName" == "stef"} pklist {anna stefan}
+    lappend x [qgdbm::tsql select {$name} from check pklist {anna stefan}]    
+    lappend x [[qgdbm::gdbmHandle check] count]
+    qgdbm::tsql delete from check
+    lappend x [[qgdbm::gdbmHandle check] count]
+} {1 4 anna 3 1}
+
+test qgdbm_delete-1.3 {error checking} {
+    qgdbm::tsql insert into check values $stdInsert
+    set x [catch {qgdbm::tsql delete from chk} msg]
+    lappend x [catch {qgdbm::tsql dELETE frOm chECK where {"$nickname" == "hello"}} msg]
+    lappend x [catch {qgdbm::tsql dELETE frOm chECK where {"$NickName" = "hello"}} msg]
+} {1 1 1}
+
+# ------ drop table ------
+test qgdbm_drop_table-1.1  {drop the table check} {
+    # cleanup test-table
+    set x [qgdbm::tsql drOp tAble Check]
+    lappend x [catch {qgdbm::tsql drop table check}]
+} {1}
+
+
+# ------ create/alter user ------
+test qgdbm_create_alter_user-1.1 {create a standard user without system option} {
+    set x [catch {qgdbm::tsql crEATE uSEr fred identifiEd By feuerstein} msg]
+    qgdbm::init -system 1 -log 0
+    lappend x [catch {qgdbm::tsql creATE usER fred ideNTIFIED bY feuerstein} msg]
+    lappend x [qgdbm::tsql seleCt {$user $passwd} frOm sysTem pklist fred]
+    qgdbm::tsql alTER usER fred idENTIFIED bY helma
+    lappend x [qgdbm::tsql select {$user $passwd} from system where {"$user" == "fred"}]
+} {1 0 {{fred feuerstein}} {{fred helma}}}
+
+# ------ drop user ------
+test qgdbm_drop_user-1.1 {drop existing/non-existing user} {
+    set x {}
+    lappend x [qgdbm::tsql dROP uSER fred]
+    lappend x [qgdbm::tsql select {$user $passwd} from system pklist fred]
+    lappend x [catch {qgdbm::tsql drop user fred}]
+    lappend x [file exists fred]
+} {{} {} 1 0}
+
+# ------ alter table ------
+test qgdbm_alter_table-1.1 {create table alter} {
+    qgdbm::tsql create table alter {{name char {[string length "$name"] < 10}} {age integer {("$age" > "0") && ("$age" < "100")}}}
+    qgdbm::tsql insert into alter values {{stefan 30}}
+    set x [catch {qgdbm::tsql insert into alter values {{annabelle_mein_schatz 90}}} msg]
+    lappend x [catch {qgdbm::tsql insert into alter values {{annabelle 130}}} msg]
+    lappend x [catch {qgdbm::tsql insert into alter values {{annabelle -20}}} msg]
+    lappend x [catch {qgdbm::tsql alter table alter modify {{nam integer}}} msg]
+    lappend x [catch {qgdbm::tsql alter table alter modify {{name int}}} msg]
+} {1 1 1 1 1}
+
+# ------ constraints in table ------
+test qgdbm_constraints-1.1 {checking insert/update-constraints} {
+    catch {qgdbm::tsql drop table check}
+    qgdbm::tsql creATE tabLE chECK {{name chAR} {NickName char {[string length $NickName] < 20}} {birthday daTE} {size reAL {("$size" != "") && ("$size" < 2.50) && ("$size" > 0.40)}} {weight intEGER}}
+    qgdbm::tsql insert into check values $stdInsert
+    set x [catch {qgdbm::tsql insert into check {$name $NickName $size} values [list {new_name very_long_nick_name_too_long_in_fact 2.0}]} msg]
+    lappend x [catch {qgdbm::tsql insert into check {$name $size} values [list {new_name 3.0}]} msg]
+    lappend x [catch {qgdbm::tsql insert into check {$name $size} values [list {new_name 2.0}]} msg]
+    lappend x [catch {qgdbm::tsql update check {$NickName} very_long_nick_name_too_long_in_fact pklist stefan} msg]
+    lappend x [catch {qgdbm::tsql update check {$size} 0 pklist stefan} msg]
+    set x
+} {1 1 0 1 1}
+
+qgdbm::cleanup
+
+# delete the created test-files
+file delete -force check.qg check_new.qg system.qg alter.qg fred

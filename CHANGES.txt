@@ -1,0 +1,41 @@
+CHANGES for 0.5 again 2005/04/14 -------------------------------------------
+
+* added some changes from Thomas Maeder
+  e.g avoided isdigit because of possible buffer-overflow,
+  further checks regarding string size ... and fixes for "no-trailing-null"
+  Thanks for that.
+
+CHANGES for 0.5 ------------------------------------------------------------
+
+* Realized persistant arrays
+* Added "keys"-option to get ALL keys from gdbm-file
+* Added "-no_trailing_null-option" to gdbm_open
+* gdbm_open without parameters returns all currently opened
+  handles
+* Removed bug with return-values from count/maxkey returned as
+  TCL_STATIC (Thanks to Uwe Klein)
+* Restructured code to be more maintainable :-)
+
+* INCOMPATIBILITIES *
+  - you shouldn't have relied on "gdbm_open" to print a usage
+    information when called with no parameters, this must now
+    be "gdbm_open -help"
+
+CHANGES for 0.4 ------------------------------------------------------------
+
+* The created library is renamed to tgdbm.dll because of some
+  confusion with tclgdbm.dll.
+* The tests uses the tcltest-package, instead of shipping the
+  good old "defs"-file.
+* Using tcl-stubs.
+* The shared library is now splitted (even on windows) in two
+  parts. The gdbm.dll (which should be the official windows-port
+  in the near future) and the Tcl-Extension tgdbm.dll (which uses
+  gdbm.dll).
+
+* INCOMPATIBILITIES *
+  - If you have used:
+    package require gdbm
+
+    you should change this to
+    package require tgdbm
