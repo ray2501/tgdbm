@@ -43,37 +43,30 @@
  
 static char rcsid[] = "$Id: tgdbm.c,v 1.5 2005/04/14 14:13:01 svogel Exp $";
 
-#if defined(WIN32)
-#   if defined(_MSC_VER)
-#     define EXPORT(a,b) __declspec(dllexport) a b
+// Sync to tcl.h
+#if (defined(__WIN32__) && (defined(_MSC_VER) || (__BORLANDC__ >= 0x0550) || defined(__LCC__) || defined(__WATCOMC__) || (defined(__GNUC__) && defined(__declspec))))
+#   define HAVE_DECLSPEC 1
+#   ifdef STATIC_BUILD
+#       define DLLIMPORT
+#       define DLLEXPORT
+#       ifdef _DLL
+#           define CRTIMPORT __declspec(dllimport)
+#       else
+#           define CRTIMPORT
+#       endif
 #   else
-#     if defined(__BORLANDC__)
-#         define EXPORT(a,b) a _export b
-#     else
-#         define EXPORT(a,b) a b
-#     endif
+#       define DLLIMPORT __declspec(dllimport)
+#       define DLLEXPORT __declspec(dllexport)
+#       define CRTIMPORT __declspec(dllimport)
 #   endif
 #else
-#   define EXPORT(a,b) a b
-#endif
-
-#ifdef STATIC_BUILD
-# define DLLIMPORT
-# define DLLEXPORT
-#else
-#ifdef WIN32
-# define DLLEXPORT __declspec(dllexport)      // dll-creation
-# define DLLIMPORT __declspec(dllimport)
-#else
-# define DLLIMPORT                            // static lib
-# define DLLEXPORT
-#endif
-#endif
-
-#ifdef USE_DLL
-# define IMEXPORT DLLIMPORT
-#else
-# define IMEXPORT DLLEXPORT
+#   define DLLIMPORT
+#   if defined(__GNUC__) && __GNUC__ > 3
+#       define DLLEXPORT __attribute__ ((visibility("default")))
+#   else
+#       define DLLEXPORT
+#   endif
+#   define CRTIMPORT
 #endif
 
 /*
@@ -104,8 +97,9 @@ extern "C" {
 #endif
 
 /* These external variables are needed by tgdbm */
-extern const char* gdbm_version;
-extern gdbm_error gdbm_errno;
+// Define in gdbm.h, disable it
+//extern const char* gdbm_version;
+//extern gdbm_error gdbm_errno;
 
 #define TGDBM_VERSION "0.5"
 
@@ -1550,8 +1544,7 @@ Gdbm_Cmd(cd_gdbm, interp, argc, argv)
  * #define DllEntryPoint DllMain 
  *----------------------------------------------------------------------
  */
-EXPORT(int, Tgdbm_Init)(interp)
-    Tcl_Interp* interp;
+EXTERN int Tgdbm_Init(Tcl_Interp *interp)
 {
     int i;
     char sErrnum[5], sErrMsg[128];
