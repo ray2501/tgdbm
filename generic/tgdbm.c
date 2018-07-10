@@ -113,7 +113,7 @@ extern "C" {
 #define GDBM_TRACE_ALL (TCL_TRACE_WRITES | TCL_TRACE_READS | TCL_TRACE_UNSETS | TCL_TRACE_ARRAY)
 
 
-typedef int (*Gdbm_Proc) _ANSI_ARGS_(ANYARGS);
+typedef int (*Gdbm_Proc) ANYARGS;
 
 /* -------------------- global variables -------------------- */
 typedef struct {
@@ -152,10 +152,10 @@ typedef struct {
 /*
  * Prototypes for procedures defined later in this file:
  */
-static char* VariableProc _ANSI_ARGS_((ClientData, Tcl_Interp*, char*, char*, int));
-int Gdbm_Open_Cmd _ANSI_ARGS_((ClientData, Tcl_Interp*, int, char**));
-int Gdbm_Cmd _ANSI_ARGS_((ClientData, Tcl_Interp*, int, char**));
-int Gdbm_Error_Cmd _ANSI_ARGS_((ClientData, Tcl_Interp*, int, char**));
+static char* VariableProc (ClientData, Tcl_Interp*, char*, char*, int);
+int Gdbm_Open_Cmd (ClientData, Tcl_Interp*, int, char**);
+int Gdbm_Cmd (ClientData, Tcl_Interp*, int, char**);
+int Gdbm_Error_Cmd (ClientData, Tcl_Interp*, int, char**);
 
 /*
  * some defines to make checking of arguments and returning
