@@ -11,9 +11,9 @@ License:       GPL
 Group:         Development/Libraries/Tcl
 Source:        %{packagename}-%{version}.tar.gz
 URL:           https://github.com/ray2501/tgdbm
-Buildrequires: autoconf
-Buildrequires: gdbm-devel
-Buildrequires: tcl-devel >= 8.4
+BuildRequires: autoconf
+BuildRequires: gdbm-devel
+BuildRequires: tcl-devel >= 8.4
 Requires:      tcl >= 8.4
 Requires:      libgdbm4
 BuildRoot:     %{buildroot}
