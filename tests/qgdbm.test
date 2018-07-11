@@ -8,7 +8,7 @@
 
 # extend auto-loader-path, to avoid interference by installed versions
 set auto_path [concat .. $auto_path]
-package require -exact qgdbm 0.5
+package require -exact qgdbm 0.6
 
 # standard insert-data
 set stdInsert [list "anna schatzi [clock scan 09/09/1972] 1.80 62" \

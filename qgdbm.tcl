@@ -6,9 +6,9 @@
 #   20.02.2000: 0.3 initial official version
 #   09.07.2000: fixed renaming of gdbm to tgdbm
 
-package require -exact tgdbm 0.5
+package require -exact tgdbm 0.6
 
-set qgdbm_version 0.5
+set qgdbm_version 0.6
 package provide qgdbm $qgdbm_version
 
 

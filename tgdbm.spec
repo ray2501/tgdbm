@@ -5,7 +5,7 @@
 
 Name:          tcl-tgdbm
 Summary:       Tcl interface to the Gdbm
-Version:       0.5
+Version:       0.6
 Release:       0
 License:       GPL
 Group:         Development/Libraries/Tcl
@@ -23,7 +23,7 @@ This is a Tcl-Wrapper for the famous gdbm (the GNU-Version of dbm) and
 a small database-utility "Qgdbm".
 
 %prep
-%setup -q -n %{packagename}
+%setup -q -n %{packagename}-%{version}
 
 %build
 ./configure \

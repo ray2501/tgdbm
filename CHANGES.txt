@@ -1,3 +1,9 @@
+CHANGES for 0.6 2018/07/11 -------------------------------------------------
+
+* Fix GDBM_UNKNOWN_ERROR error
+* Try to fix build failed in Ubuntu 14.04
+* Remove _ANSI_ARGS_
+
 CHANGES for 0.5 again 2005/04/14 -------------------------------------------
 
 * added some changes from Thomas Maeder
