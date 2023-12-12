@@ -1,3 +1,7 @@
+CHANGES for 0.7 2023/12/12 -------------------------------------------------
+
+* Update tclconfig files
+
 CHANGES for 0.6 2018/07/11 -------------------------------------------------
 
 * Fix GDBM_UNKNOWN_ERROR error

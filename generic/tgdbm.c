@@ -101,7 +101,7 @@ extern "C" {
 //extern const char* gdbm_version;
 //extern gdbm_error gdbm_errno;
 
-#define TGDBM_VERSION "0.6"
+#define TGDBM_VERSION "0.7"
 
 /* 0x10 */
 #define GDBM_SETVAR TCL_TRACE_READS

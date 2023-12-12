@@ -18,7 +18,7 @@ verbose error
 
 # extend auto-loader-path, to avoid interference by installed versions
 set auto_path [concat .. $auto_path]
-package require -exact tgdbm 0.6
+package require -exact tgdbm 0.7
 
 # just to be sure delete the created test-files
 catch {file delete -force test.gdbm test1.gdbm strange.gdbm junk_n_copy.gdbm artest.gdbm}

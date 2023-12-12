@@ -5,7 +5,7 @@
 
 Name:          tcl-tgdbm
 Summary:       Tcl interface to the Gdbm
-Version:       0.6
+Version:       0.7
 Release:       0
 License:       GPL-2.0-only
 Group:         Development/Libraries/Tcl
