@@ -1572,7 +1572,7 @@ EXTERN int Tgdbm_Init(Tcl_Interp *interp)
         "GDBM_ILLEGAL_DATA","GDBM_OPT_ALREADY_SET","GDBM_OPT_ILLEGAL"};
 
     
-    if (Tcl_InitStubs(interp, "8.4", 0) == NULL) {
+    if (Tcl_InitStubs(interp, TCL_VERSION, 0) == NULL) {
       return TCL_ERROR;
 	}
 
