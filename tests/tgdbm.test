@@ -174,8 +174,24 @@ test gdbm_reorg-1.1 {gdbmN reorganize} {
     set g [gdbm_open -writer -wrcreat -sync test.gdbm]
 	set res [expr {"[gdbm_open]"=="$g"}]
     $g -replace store hello world
-	$g -replace store Stefan [string repeat Vogel,Stefan 2]
-	$g delete Stefan
+	$g -replace store Stefan1 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan2 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan3 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan4 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan5 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan6 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan7 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan8 [string repeat Vogel,Stefan 40]
+	$g -replace store Stefan9 [string repeat Vogel,Stefan 40]
+	$g delete Stefan1
+	$g delete Stefan2
+	$g delete Stefan3
+	$g delete Stefan4
+	$g delete Stefan5
+	$g delete Stefan6
+	$g delete Stefan7
+	$g delete Stefan8
+	$g delete Stefan9
     set itemSize [$g count]
 	set fileSize [file size test.gdbm]
 	# just a dummy open to confuse *g*
