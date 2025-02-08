@@ -203,8 +203,8 @@ test gdbm_error-1.1 {checking all error-codes} {
 					"Reader can't delete" "Reader can't store" \
 					"Reader can't reorganize" "Should not happen: unused error code" \
                                         "Item not found" \
-					"Reorganize failed" "Cannot replace" "Illegal data" \
-					"Option already set" "Illegal option"}
+					"Reorganize failed" "Cannot replace" "Malformed data" \
+					"Option already set" "Bad option value"}
     set x 0
     for {set i 0} {$i < [llength $errors]} {incr i} {
         if {[gdbm_strerror $i] != [lindex $errors $i]} {
